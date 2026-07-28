@@ -4,11 +4,10 @@ FROM node:23-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
+# Copy package files and config files first
 COPY package*.json ./
-COPY prisma ./prisma
 COPY tsconfig.json ./
-COPY prisma.config.ts ./
+COPY prisma ./prisma
 
 # Install dependencies (including dev dependencies for build)
 RUN npm ci
