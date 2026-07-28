@@ -30,6 +30,9 @@
     "url": "https://github.com/vaibhavmasaye/remoteJobAssignment/issues"
   },
   "homepage": "https://github.com/vaibhavmasaye/remoteJobAssignment#readme",
+  "engines": {
+    "node": ">=20 <24"
+  },
   "dependencies": {
     "dotenv": "^17.4.2",
     "fastify": "^5.10.0",
