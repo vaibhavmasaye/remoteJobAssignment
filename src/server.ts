@@ -53,8 +53,16 @@ async function start() {
     const logger = getLogger('server');
 
     console.log('[STARTUP] Initializing database schema...');
-    await initializeDatabase();
-    console.log('[STARTUP] ✅ Database initialized');
+    try {
+      await initializeDatabase();
+      console.log('[STARTUP] ✅ Database initialized');
+    } catch (dbError: any) {
+      console.error('[STARTUP] ❌ Database initialization failed');
+      console.error('[STARTUP] Error message:', dbError?.message);
+      console.error('[STARTUP] Error code:', dbError?.code);
+      console.error('[STARTUP] Full error:', JSON.stringify(dbError, null, 2));
+      throw dbError;
+    }
     
     console.log('[STARTUP] Creating Fastify application...');
     const app = await createApp();
@@ -66,10 +74,15 @@ async function start() {
     console.log('[STARTUP] ');
     console.log('[STARTUP] ✅✅✅ SERVER STARTED SUCCESSFULLY ✅✅✅');
     console.log('[STARTUP] ');
-  } catch (error) {
+  } catch (error: any) {
     console.error('[STARTUP] ');
     console.error('[STARTUP] ❌ STARTUP FAILED');
-    console.error('[STARTUP] Error:', error);
+    console.error('[STARTUP] Error type:', error?.constructor?.name);
+    console.error('[STARTUP] Error message:', error?.message);
+    console.error('[STARTUP] Error code:', error?.code);
+    if (error?.stack) {
+      console.error('[STARTUP] Stack trace:', error.stack);
+    }
     console.error('[STARTUP] ');
     process.exit(1);
   }

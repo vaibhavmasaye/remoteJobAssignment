@@ -158,12 +158,32 @@ export async function initializeDatabase(): Promise<void> {
       .map(stmt => stmt.trim())
       .filter(stmt => stmt.length > 0);
     
-    for (const statement of statements) {
-      await execute(statement);
+    console.log(`[DB-INIT] Found ${statements.length} SQL statements to execute`);
+    
+    for (let i = 0; i < statements.length; i++) {
+      const statement = statements[i];
+      try {
+        console.log(`[DB-INIT] Executing statement ${i + 1}/${statements.length}...`);
+        await execute(statement);
+        console.log(`[DB-INIT] ✅ Statement ${i + 1} executed`);
+      } catch (stmtError: any) {
+        console.error(`[DB-INIT] ❌ Statement ${i + 1} failed`);
+        console.error(`[DB-INIT] Statement: ${statement.substring(0, 100)}...`);
+        console.error(`[DB-INIT] Error: ${stmtError?.message}`);
+        // Continue on "already exists" errors
+        if (stmtError?.code === '42P07') {
+          console.log(`[DB-INIT] ⚠️  Table already exists, continuing...`);
+          continue;
+        }
+        throw stmtError;
+      }
     }
     
+    console.log('[DB-INIT] ✅ All statements executed successfully');
     logger.info('✅ Database schema initialized successfully');
   } catch (error) {
+    console.error('[DB-INIT] ❌ Database initialization failed');
+    console.error('[DB-INIT] Error:', error);
     logger.error({ error }, 'Failed to initialize database schema');
     throw error;
   }
