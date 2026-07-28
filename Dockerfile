@@ -3,25 +3,27 @@ FROM node:23-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files first
+# Copy package files
 COPY package*.json ./
+
+# Install dependencies
 RUN npm ci
 
-# Copy source files BEFORE generate
+# Copy config and source
 COPY tsconfig.json ./
 COPY prisma ./prisma
 COPY src ./src
 
-# Generate Prisma client
-RUN npx prisma generate
+# Generate Prisma Client
+RUN npm exec prisma generate -- --schema prisma/schema.prisma
 
-# Verify generation
-RUN test -d src/generated/prisma && echo "✓ Prisma generated successfully" || (echo "✗ Prisma generation failed" && exit 1)
+# Verify prisma exists by listing
+RUN ls -la src/generated/prisma/index.ts || exit 1
 
-# Build TypeScript
+# Build 
 RUN npm run build
 
-# Runtime stage  
+# Runtime stage
 FROM node:23-alpine
 
 WORKDIR /app
@@ -33,9 +35,12 @@ RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
 COPY package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
-# Copy compiled code AND node_modules/.prisma
+# Copy built code
 COPY --from=builder /app/dist ./dist
+
+# Copy prisma runtime files
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/src/generated ./src/generated
 COPY prisma ./prisma
 
 RUN chown -R nodejs:nodejs /app
