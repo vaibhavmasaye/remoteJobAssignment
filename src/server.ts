@@ -52,6 +52,22 @@ async function start() {
     const config = getConfig();
     const logger = getLogger('server');
 
+    console.log('[STARTUP] ');
+    console.log('[STARTUP] Testing database connection...');
+    try {
+      const { checkConnection } = await import('./db');
+      const isConnected = await checkConnection();
+      if (!isConnected) {
+        throw new Error('Database connection check returned false');
+      }
+      console.log('[STARTUP] ✅ Database connection successful');
+    } catch (connError: any) {
+      console.error('[STARTUP] ❌ Database connection failed');
+      console.error('[STARTUP] Error:', connError?.message);
+      throw connError;
+    }
+
+    console.log('[STARTUP] ');
     console.log('[STARTUP] Initializing database schema...');
     try {
       await initializeDatabase();
@@ -64,6 +80,7 @@ async function start() {
       throw dbError;
     }
     
+    console.log('[STARTUP] ');
     console.log('[STARTUP] Creating Fastify application...');
     const app = await createApp();
     
