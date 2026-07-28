@@ -10,10 +10,10 @@ Run the Sync Pipeline locally with your credentials (HubSpot, Google Calendar, P
 Before starting, verify you have:
 - ✅ Node.js 23+ installed (`node --version`)
 - ✅ PostgreSQL installed (or install via `brew install postgresql@15`)
-- ✅ Your credentials:
-  - HubSpot: `YOUR_HUBSPOT_API_TOKEN`
-  - Google Calendar: OAuth credentials configured
-  - Admin key: Already set in `.env`
+- ✅ Your credentials (set in `.env`):
+  - HubSpot API token (from your app dashboard)
+  - Google Calendar OAuth credentials
+  - Admin key (already configured)
 
 ---
 
