@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import { getConfig } from './config/env';
 import { getLogger } from './observability/logger';
 import { prisma } from './db/prisma';
+import { registerSyncRoutes } from './routes/sync.routes';
 
 const config = getConfig();
 const logger = getLogger('app');
@@ -74,6 +75,9 @@ export async function createApp() {
       },
     });
   });
+
+  // Register sync routes
+  await registerSyncRoutes(fastify);
 
   // Graceful shutdown
   const signals = ['SIGTERM', 'SIGINT'];
