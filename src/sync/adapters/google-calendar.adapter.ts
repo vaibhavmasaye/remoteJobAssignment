@@ -10,7 +10,6 @@ import { ErrorClassifier } from '../error-classifier';
 import { getLogger } from '../../observability/logger';
 import { getConfig } from '../../config/env';
 import crypto from 'crypto';
-import { SourceType } from '../../generated/prisma';
 
 const config = getConfig();
 const logger = getLogger('google-calendar-adapter');
@@ -75,7 +74,7 @@ function checkPageLimit(pageCount: number, maxPages: number, context: string): v
 }
 
 export class GoogleCalendarAdapter extends BaseAdapter implements SourceAdapter {
-  source = SourceType.GOOGLE_CALENDAR;
+  source = 'GOOGLE_CALENDAR';
   private clientId = config.GOOGLE_CLIENT_ID;
   private clientSecret = config.GOOGLE_CLIENT_SECRET;
   private refreshToken = config.GOOGLE_REFRESH_TOKEN;

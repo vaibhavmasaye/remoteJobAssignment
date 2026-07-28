@@ -1,12 +1,11 @@
 import { SyncContext, SourceAdapter, NormalizedRecord } from './types';
 import { idempotentWriter } from './idempotent-writer';
 import { failedRecordRepository, syncRunRepository, checkpointRepository } from '../db/repositories';
-import { prisma } from '../db/prisma';
 import { getLogger } from '../observability/logger';
 import { hubspotAdapter } from './adapters/hubspot.adapter';
 import { stripeAdapter } from './adapters/stripe.adapter';
 import { googleCalendarAdapter } from './adapters/google-calendar.adapter';
-import { SourceType, SyncMode, FailureStage } from '../generated/prisma';
+import { SourceType } from './types';
 
 const logger = getLogger('orchestrator');
 
@@ -22,9 +21,9 @@ export interface SyncOptions {
  */
 export class SyncOrchestrator {
   private adapters: Map<SourceType, SourceAdapter> = new Map([
-    [SourceType.HUBSPOT, hubspotAdapter as unknown as SourceAdapter],
-    [SourceType.STRIPE, stripeAdapter as unknown as SourceAdapter],
-    [SourceType.GOOGLE_CALENDAR, googleCalendarAdapter as unknown as SourceAdapter],
+    ['HUBSPOT', hubspotAdapter as unknown as SourceAdapter],
+    ['STRIPE', stripeAdapter as unknown as SourceAdapter],
+    ['GOOGLE_CALENDAR', googleCalendarAdapter as unknown as SourceAdapter],
   ]);
 
   /**
@@ -120,7 +119,7 @@ export class SyncOrchestrator {
       signal: controller.signal,
     };
 
-    let checkpoint = await checkpointRepository.getOrCreateCheckpoint(connectionId, 'contact');
+    let checkpoint = await checkpointRepository.getOrCreateCheckpoint({ connectionId, objectType: 'contact' });
 
     try {
       let recordsSeen = 0;
@@ -158,15 +157,11 @@ export class SyncOrchestrator {
               recordsFailed++;
               logger.warn({ error, record }, 'Normalization failed');
 
-              await failedRecordRepository.createFailedRecord({
-                sourceSyncRunId: sourceSyncRun.id,
+              await failedRecordRepository.create({
                 connectionId,
-                source,
-                stage: 'NORMALIZE',
-                errorCode: 'NORMALIZATION_ERROR',
+                objectType: 'contact',
+                externalId: record.id,
                 errorMessage: error instanceof Error ? error.message : String(error),
-                rawPayload: record,
-                retryable: false,
               });
             }
           }
@@ -199,18 +194,14 @@ export class SyncOrchestrator {
 
       // Update checkpoint after successful completion
       const newCheckpoint = new Date();
-      await checkpointRepository.advanceCheckpoint(checkpoint.id, {
+      await checkpointRepository.advanceCheckpoint(connectionId, 'contact', {
         watermark: newCheckpoint,
-        lastIncrementalSyncAt: newCheckpoint,
       });
 
       // Finalize source run
       await syncRunRepository.updateSourceSyncRun(sourceSyncRun.id, {
         status: 'SUCCESS',
-        recordsSeen,
-        recordsWritten,
-        recordsSkipped,
-        recordsFailed,
+        recordCount: recordsWritten,
         finishedAt: new Date(),
       });
 
@@ -225,18 +216,16 @@ export class SyncOrchestrator {
       if (adapter.isStaleCursorError(error)) {
         logger.warn({ source }, 'Stale cursor detected, will fallback to full sync');
 
-        await checkpointRepository.clearCheckpoint(checkpoint.id);
+        await checkpointRepository.clearCheckpoint(connectionId, 'contact');
 
         await syncRunRepository.updateSourceSyncRun(sourceSyncRun.id, {
-          status: 'FALLBACK_FULL',
-          errorCode: 'STALE_CURSOR',
+          status: 'FAILED',
           errorMessage: 'Sync token/cursor invalid, cleared for full resync',
           finishedAt: new Date(),
         });
       } else {
         await syncRunRepository.updateSourceSyncRun(sourceSyncRun.id, {
           status: 'FAILED',
-          errorCode: error?.code || 'SYNC_ERROR',
           errorMessage: error?.message || String(error),
           finishedAt: new Date(),
         });

@@ -3,7 +3,7 @@ import { adminAuthGuard, demoModeGuard } from '../security/admin-auth';
 import { syncOrchestrator } from '../sync/orchestrator';
 import { syncRunRepository } from '../db/repositories/sync-run.repository';
 import { externalRecordRepository } from '../db/repositories/external-record.repository';
-import { SourceType } from '../generated/prisma';
+import { SourceType } from '../sync/types';
 import { getLogger } from '../observability/logger';
 
 const logger = getLogger('sync-routes');
@@ -20,9 +20,9 @@ export async function registerSyncRoutes(app: FastifyInstance) {
 
       // For now, create connections for all sources (in production, would query DB)
       const connectionIds = new Map<SourceType, string>([
-        [SourceType.HUBSPOT, 'hubspot-connection-1'],
-        [SourceType.STRIPE, 'stripe-connection-1'],
-        [SourceType.GOOGLE_CALENDAR, 'google-calendar-connection-1'],
+        ['HUBSPOT', 'hubspot-connection-1'],
+        ['STRIPE', 'stripe-connection-1'],
+        ['GOOGLE_CALENDAR', 'google-calendar-connection-1'],
       ]);
 
       const runId = await syncOrchestrator.triggerSync(connectionIds);
@@ -102,11 +102,7 @@ export async function registerSyncRoutes(app: FastifyInstance) {
           source: s.source,
           mode: s.mode,
           status: s.status,
-          recordsSeen: s.recordsSeen,
-          recordsWritten: s.recordsWritten,
-          recordsSkipped: s.recordsSkipped,
-          recordsFailed: s.recordsFailed,
-          errorCode: s.errorCode,
+          recordCount: s.recordCount,
           errorMessage: s.errorMessage,
           startedAt: s.startedAt,
           finishedAt: s.finishedAt,
@@ -147,14 +143,12 @@ export async function registerSyncRoutes(app: FastifyInstance) {
         return reply.code(200).send({
           record: {
             id: record.id,
-            source: record.source,
-            externalObjectType: record.externalObjectType,
+            objectType: record.objectType,
             externalId: record.externalId,
-            normalizedType: record.normalizedType,
-            normalizedId: record.normalizedId,
-            isDeleted: record.isDeleted,
-            sourceUpdatedAt: record.sourceUpdatedAt,
-            lastSeenAt: record.lastSeenAt,
+            data: record.data,
+            syncedAt: record.syncedAt,
+            createdAt: record.createdAt,
+            updatedAt: record.updatedAt,
           },
         });
       }

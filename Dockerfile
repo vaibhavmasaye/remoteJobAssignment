@@ -11,18 +11,7 @@ RUN npm ci
 
 # Copy config and source
 COPY tsconfig.json ./
-COPY prisma ./prisma
 COPY src ./src
-
-# Generate Prisma Client
-RUN npm exec prisma generate -- --schema prisma/schema.prisma
-
-# Create index.ts for Prisma exports (Prisma doesn't generate this)
-# This MUST be before npm run build
-RUN mkdir -p src/generated/prisma && echo "export * from './client';" > src/generated/prisma/index.ts
-
-# Verify index.ts was created
-RUN test -f src/generated/prisma/index.ts && echo "✅ index.ts created" || (echo "❌ index.ts NOT found" && exit 1)
 
 # Build 
 RUN npm run build
@@ -41,11 +30,6 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 # Copy built code
 COPY --from=builder /app/dist ./dist
-
-# Copy prisma runtime files
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/src/generated ./src/generated
-COPY prisma ./prisma
 
 RUN chown -R nodejs:nodejs /app
 USER nodejs

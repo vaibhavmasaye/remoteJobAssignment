@@ -1,160 +1,62 @@
-import { prisma } from '../prisma';
-import { Person, Payment, CalendarEvent } from '../../generated/prisma';
+import { query, execute } from '../connection';
+import { v4 as uuidv4 } from 'uuid';
+
+export interface NormalizedRecord {
+  id: string;
+  source: string;
+  entityType: string;
+  entityData: any;
+  externalRecordId?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 export class NormalizedRepository {
-  // ============================================================================
-  // PERSON OPERATIONS
-  // ============================================================================
+  /**
+   * Create normalized record
+   */
+  async create(data: {
+    source: string;
+    entityType: string;
+    entityData: any;
+    externalRecordId?: string;
+  }): Promise<NormalizedRecord> {
+    const id = uuidv4().replace(/-/g, '').substring(0, 24);
+    const now = new Date();
 
-  async createOrUpdatePerson(data: {
-    id: string;
-    fullName?: string;
-    firstName?: string;
-    lastName?: string;
-    email?: string;
-    phone?: string;
-    companyName?: string;
-    status?: string;
-  }): Promise<Person> {
-    return prisma.person.upsert({
-      where: { id: data.id },
-      update: {
-        fullName: data.fullName,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        email: data.email,
-        phone: data.phone,
-        companyName: data.companyName,
-        status: data.status,
-        updatedAt: new Date(),
-      },
-      create: {
-        id: data.id,
-        fullName: data.fullName,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        email: data.email,
-        phone: data.phone,
-        companyName: data.companyName,
-        status: data.status,
-      },
-    });
+    await execute(
+      `INSERT INTO normalized_data (id, source, entity_type, entity_data, external_record_id, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [
+        id,
+        data.source,
+        data.entityType,
+        JSON.stringify(data.entityData),
+        data.externalRecordId || null,
+        now,
+        now,
+      ]
+    );
+
+    return {
+      id,
+      source: data.source,
+      entityType: data.entityType,
+      entityData: data.entityData,
+      externalRecordId: data.externalRecordId,
+      createdAt: now,
+      updatedAt: now,
+    };
   }
 
-  async getPerson(id: string): Promise<Person | null> {
-    return prisma.person.findUnique({ where: { id } });
-  }
-
-  // ============================================================================
-  // PAYMENT OPERATIONS
-  // ============================================================================
-
-  async createOrUpdatePayment(data: {
-    id: string;
-    customerExternalId?: string;
-    amountMinor: bigint;
-    currency: string;
-    status: string;
-    paymentMethodType?: string;
-    paidAt?: Date;
-    refundedAmountMinor?: bigint;
-  }): Promise<Payment> {
-    return prisma.payment.upsert({
-      where: { id: data.id },
-      update: {
-        customerExternalId: data.customerExternalId,
-        amountMinor: data.amountMinor,
-        currency: data.currency,
-        status: data.status,
-        paymentMethodType: data.paymentMethodType,
-        paidAt: data.paidAt,
-        refundedAmountMinor: data.refundedAmountMinor || 0n,
-        updatedAt: new Date(),
-      },
-      create: {
-        id: data.id,
-        customerExternalId: data.customerExternalId,
-        amountMinor: data.amountMinor,
-        currency: data.currency,
-        status: data.status,
-        paymentMethodType: data.paymentMethodType,
-        paidAt: data.paidAt,
-        refundedAmountMinor: data.refundedAmountMinor || 0n,
-      },
-    });
-  }
-
-  async getPayment(id: string): Promise<Payment | null> {
-    return prisma.payment.findUnique({ where: { id } });
-  }
-
-  async getPaymentsByCustomer(customerExternalId: string): Promise<Payment[]> {
-    return prisma.payment.findMany({
-      where: { customerExternalId },
-      orderBy: { createdAt: 'desc' },
-    });
-  }
-
-  // ============================================================================
-  // CALENDAR EVENT OPERATIONS
-  // ============================================================================
-
-  async createOrUpdateCalendarEvent(data: {
-    id: string;
-    calendarExternalId: string;
-    summary?: string;
-    description?: string;
-    startAt?: Date;
-    endAt?: Date;
-    isAllDay?: boolean;
-    timezone?: string;
-    status: string;
-    organizerEmail?: string;
-    attendees?: any;
-    recurringEventExternalId?: string;
-  }): Promise<CalendarEvent> {
-    return prisma.calendarEvent.upsert({
-      where: { id: data.id },
-      update: {
-        calendarExternalId: data.calendarExternalId,
-        summary: data.summary,
-        description: data.description,
-        startAt: data.startAt,
-        endAt: data.endAt,
-        isAllDay: data.isAllDay || false,
-        timezone: data.timezone,
-        status: data.status,
-        organizerEmail: data.organizerEmail,
-        attendees: data.attendees,
-        recurringEventExternalId: data.recurringEventExternalId,
-        updatedAt: new Date(),
-      },
-      create: {
-        id: data.id,
-        calendarExternalId: data.calendarExternalId,
-        summary: data.summary,
-        description: data.description,
-        startAt: data.startAt,
-        endAt: data.endAt,
-        isAllDay: data.isAllDay || false,
-        timezone: data.timezone,
-        status: data.status,
-        organizerEmail: data.organizerEmail,
-        attendees: data.attendees,
-        recurringEventExternalId: data.recurringEventExternalId,
-      },
-    });
-  }
-
-  async getCalendarEvent(id: string): Promise<CalendarEvent | null> {
-    return prisma.calendarEvent.findUnique({ where: { id } });
-  }
-
-  async getCalendarEventsByCalendar(calendarExternalId: string): Promise<CalendarEvent[]> {
-    return prisma.calendarEvent.findMany({
-      where: { calendarExternalId },
-      orderBy: { startAt: 'asc' },
-    });
+  /**
+   * Get records by source and type
+   */
+  async getBySourceAndType(source: string, entityType: string, limit: number = 1000): Promise<NormalizedRecord[]> {
+    return query<NormalizedRecord>(
+      `SELECT * FROM normalized_data WHERE source = $1 AND entity_type = $2 ORDER BY created_at DESC LIMIT $3`,
+      [source, entityType, limit]
+    );
   }
 }
 

@@ -1,10 +1,18 @@
-import { SourceType, NormalizedType } from '../generated/prisma';
+/**
+ * Source types
+ */
+export type SourceType = 'HUBSPOT' | 'STRIPE' | 'GOOGLE_CALENDAR';
+
+/**
+ * Normalized types
+ */
+export type NormalizedType = 'PERSON' | 'PAYMENT' | 'CALENDAR_EVENT';
 
 /**
  * Source adapter contract
  */
 export interface SourceAdapter<TCursor = string | null> {
-  source: SourceType;
+  source: string;
 
   /**
    * Fetch all records from source (full sync)
@@ -37,7 +45,7 @@ export interface SyncContext {
   syncRunId: string;
   sourceSyncRunId: string;
   connectionId: string;
-  source: SourceType;
+  source: string;
   maxPages: number;
   pageSize: number;
   requestTimeoutMs: number;

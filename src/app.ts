@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import { getConfig } from './config/env';
 import { getLogger } from './observability/logger';
-import { prisma } from './db/prisma';
+import { initializeDatabase, closePool, checkConnection } from './db';
 import { registerSyncRoutes } from './routes/sync.routes';
 import {
   createRateLimiter,
@@ -51,7 +51,10 @@ export async function createApp() {
     try {
       if (config.HEALTH_CHECK_DATABASE) {
         logger.debug('Checking database connection...');
-        await prisma.$queryRaw`SELECT 1`;
+        const isConnected = await checkConnection();
+        if (!isConnected) {
+          throw new Error('Database connection failed');
+        }
       }
       return reply.code(200).send({
         status: 'ready',
@@ -120,7 +123,7 @@ export async function createApp() {
       stopRateLimiter();
       
       await fastify.close();
-      await prisma.$disconnect();
+      await closePool();
       process.exit(0);
     });
   });

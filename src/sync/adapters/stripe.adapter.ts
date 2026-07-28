@@ -10,7 +10,6 @@ import { ErrorClassifier } from '../error-classifier';
 import { getLogger } from '../../observability/logger';
 import { getConfig } from '../../config/env';
 import crypto from 'crypto';
-import { SourceType } from '../../generated/prisma';
 
 const config = getConfig();
 const logger = getLogger('stripe-adapter');
@@ -63,7 +62,7 @@ function checkPageLimit(pageCount: number, maxPages: number, context: string): v
 }
 
 export class StripeAdapter extends BaseAdapter implements SourceAdapter {
-  source = SourceType.STRIPE;
+  source = 'STRIPE';
   private token = config.STRIPE_SECRET_KEY;
   private baseUrl = 'https://api.stripe.com/v1';
   private pageSize = config.STRIPE_PAGE_SIZE;

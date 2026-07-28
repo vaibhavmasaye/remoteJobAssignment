@@ -3,7 +3,7 @@ import { NormalizedRecord } from './types';
 import { normalizedRepository } from '../db/repositories';
 import { externalRecordRepository } from '../db/repositories';
 import { failedRecordRepository } from '../db/repositories';
-import { SourceType, NormalizedType, FailureStage } from '../generated/prisma';
+import { NormalizedType } from './types';
 import crypto from 'crypto';
 
 const logger = getLogger('idempotent-writer');
@@ -17,7 +17,7 @@ export class IdempotentWriter {
    */
   async writeBatch(
     connectionId: string,
-    source: SourceType,
+    source: string,
     records: NormalizedRecord[],
     sourceSyncRunId: string
   ): Promise<{
@@ -45,17 +45,11 @@ export class IdempotentWriter {
         );
 
         // Record the failure
-        await failedRecordRepository.createFailedRecord({
-          sourceSyncRunId,
+        await failedRecordRepository.create({
           connectionId,
-          source,
-          externalObjectType: record.externalObjectType,
+          objectType: record.externalObjectType,
           externalId: record.externalId,
-          stage: 'WRITE',
-          errorCode: 'WRITE_ERROR',
           errorMessage: error instanceof Error ? error.message : String(error),
-          rawPayload: record.data,
-          retryable: true,
         });
       }
     }
@@ -69,7 +63,7 @@ export class IdempotentWriter {
    */
   private async writeRecord(
     connectionId: string,
-    source: SourceType,
+    source: string,
     record: NormalizedRecord
   ): Promise<boolean> {
     // Compute hash for change detection
@@ -82,28 +76,21 @@ export class IdempotentWriter {
       record.externalId
     );
 
-    // If hash hasn't changed and we've seen this before, skip
-    if (existing && existing.payloadHash === hash) {
+    // If we've seen this before, skip
+    if (existing) {
       logger.debug(
         { externalId: record.externalId, source },
-        'Record unchanged, skipping'
+        'Record found, skipping'
       );
       return false;
     }
 
-    // Upsert external record with idempotency key
-    const externalRecord = await externalRecordRepository.upsertExternalRecord({
+    // Upsert external record
+    await externalRecordRepository.upsertRecord({
       connectionId,
-      source,
-      externalObjectType: record.externalObjectType,
+      objectType: record.externalObjectType,
       externalId: record.externalId,
-      externalVersion: record.externalVersion,
-      sourceUpdatedAt: record.sourceUpdatedAt,
-      normalizedType: record.normalizedType,
-      normalizedId: record.normalizedId,
-      isDeleted: record.isDeleted,
-      rawPayload: record.data,
-      payloadHash: hash,
+      data: record.data,
     });
 
     // Write to normalized type-specific table
@@ -121,27 +108,15 @@ export class IdempotentWriter {
    * Write to type-specific normalized table
    */
   private async writeNormalizedData(record: NormalizedRecord): Promise<void> {
-    const { normalizedRepository } = await import('../db/repositories');
-
     switch (record.normalizedType) {
       case 'PERSON':
-        await normalizedRepository.createOrUpdatePerson({
-          id: record.normalizedId,
-          ...record.data,
-        });
-        break;
-
       case 'PAYMENT':
-        await normalizedRepository.createOrUpdatePayment({
-          id: record.normalizedId,
-          ...record.data,
-        });
-        break;
-
       case 'CALENDAR_EVENT':
-        await normalizedRepository.createOrUpdateCalendarEvent({
-          id: record.normalizedId,
-          ...record.data,
+        await normalizedRepository.create({
+          source: 'unknown',
+          entityType: record.normalizedType,
+          entityData: record.data,
+          externalRecordId: record.externalId,
         });
         break;
 

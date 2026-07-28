@@ -10,7 +10,6 @@ import { ErrorClassifier } from '../error-classifier';
 import { getLogger } from '../../observability/logger';
 import { getConfig } from '../../config/env';
 import crypto from 'crypto';
-import { SourceType } from '../../generated/prisma';
 
 const config = getConfig();
 const logger = getLogger('hubspot-adapter');
@@ -57,7 +56,7 @@ function checkPageLimit(pageCount: number, maxPages: number, context: string): v
 }
 
 export class HubSpotAdapter extends BaseAdapter implements SourceAdapter {
-  source = SourceType.HUBSPOT;
+  source = 'HUBSPOT';
   private token = config.HUBSPOT_ACCESS_TOKEN;
   private baseUrl = 'https://api.hubapi.com';
   private contactProperties = config.HUBSPOT_CONTACT_PROPERTIES.split(',').map((p) => p.trim());

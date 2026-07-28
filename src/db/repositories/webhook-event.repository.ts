@@ -1,110 +1,51 @@
-import { prisma } from '../prisma';
-import { ProcessedWebhookEvent, SourceType, WebhookEventStatus } from '../../generated/prisma';
+import { execute } from '../connection';
+import { v4 as uuidv4 } from 'uuid';
+
+export interface WebhookEvent {
+  id: string;
+  source: string;
+  eventType: string;
+  payload: any;
+  processedAt?: Date;
+  errorMessage?: string;
+  createdAt: Date;
+}
 
 export class WebhookEventRepository {
   /**
-   * Check if webhook event has been processed (deduplication)
+   * Create webhook event
    */
-  async isWebhookProcessed(
-    source: SourceType,
-    externalEventId: string
-  ): Promise<boolean> {
-    const event = await prisma.processedWebhookEvent.findUnique({
-      where: {
-        source_externalEventId: {
-          source,
-          externalEventId,
-        },
-      },
-    });
-    return !!event;
-  }
+  async create(data: {
+    source: string;
+    eventType: string;
+    payload: any;
+  }): Promise<WebhookEvent> {
+    const id = uuidv4().replace(/-/g, '').substring(0, 24);
+    const now = new Date();
 
-  /**
-   * Record webhook receipt for deduplication
-   */
-  async recordWebhookReceipt(data: {
-    source: SourceType;
-    externalEventId: string;
-    payloadHash: string;
-  }): Promise<ProcessedWebhookEvent> {
-    return prisma.processedWebhookEvent.upsert({
-      where: {
-        source_externalEventId: {
-          source: data.source,
-          externalEventId: data.externalEventId,
-        },
-      },
-      update: {
-        status: 'RECEIVED',
-        receivedAt: new Date(),
-      },
-      create: {
-        source: data.source,
-        externalEventId: data.externalEventId,
-        payloadHash: data.payloadHash,
-        status: 'RECEIVED',
-      },
-    });
+    await execute(
+      `INSERT INTO webhook_events (id, source, event_type, payload, created_at)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [id, data.source, data.eventType, JSON.stringify(data.payload), now]
+    );
+
+    return {
+      id,
+      source: data.source,
+      eventType: data.eventType,
+      payload: data.payload,
+      createdAt: now,
+    };
   }
 
   /**
    * Mark webhook as processed
    */
-  async markWebhookProcessed(
-    source: SourceType,
-    externalEventId: string
-  ): Promise<ProcessedWebhookEvent> {
-    return prisma.processedWebhookEvent.update({
-      where: {
-        source_externalEventId: {
-          source,
-          externalEventId,
-        },
-      },
-      data: {
-        status: 'PROCESSED',
-        processedAt: new Date(),
-      },
-    });
-  }
-
-  /**
-   * Mark webhook as failed
-   */
-  async markWebhookFailed(
-    source: SourceType,
-    externalEventId: string,
-    error: string
-  ): Promise<ProcessedWebhookEvent> {
-    return prisma.processedWebhookEvent.update({
-      where: {
-        source_externalEventId: {
-          source,
-          externalEventId,
-        },
-      },
-      data: {
-        status: 'FAILED',
-        lastError: error,
-        retryCount: {
-          increment: 1,
-        },
-      },
-    });
-  }
-
-  /**
-   * Get unprocessed webhook events
-   */
-  async getUnprocessedWebhooks(limit: number = 100): Promise<ProcessedWebhookEvent[]> {
-    return prisma.processedWebhookEvent.findMany({
-      where: {
-        status: 'RECEIVED',
-      },
-      take: limit,
-      orderBy: { receivedAt: 'asc' },
-    });
+  async markProcessed(eventId: string, errorMessage?: string): Promise<void> {
+    await execute(
+      `UPDATE webhook_events SET processed_at = NOW(), error_message = $1 WHERE id = $2`,
+      [errorMessage || null, eventId]
+    );
   }
 }
 

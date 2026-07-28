@@ -1,121 +1,89 @@
-import { prisma } from '../prisma';
-import { ExternalRecord, SourceType, NormalizedType } from '../../generated/prisma';
+import { query, queryOne, execute } from '../connection';
+import { v4 as uuidv4 } from 'uuid';
+
+export interface ExternalRecord {
+  id: string;
+  connectionId: string;
+  objectType: string;
+  externalId: string;
+  data: any;
+  syncedAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 export class ExternalRecordRepository {
   /**
-   * Upsert external record with idempotency
-   * Ensures no duplicates by source identity
+   * Create or update external record
    */
-  async upsertExternalRecord(data: {
+  async upsertRecord(data: {
     connectionId: string;
-    source: SourceType;
-    externalObjectType: string;
+    objectType: string;
     externalId: string;
-    externalVersion?: string;
-    sourceUpdatedAt?: Date;
-    normalizedType: NormalizedType;
-    normalizedId: string;
-    isDeleted?: boolean;
-    rawPayload?: any;
-    payloadHash?: string;
+    data: any;
   }): Promise<ExternalRecord> {
-    return prisma.externalRecord.upsert({
-      where: {
-        connectionId_externalObjectType_externalId: {
-          connectionId: data.connectionId,
-          externalObjectType: data.externalObjectType,
-          externalId: data.externalId,
-        },
-      },
-      update: {
-        externalVersion: data.externalVersion,
-        sourceUpdatedAt: data.sourceUpdatedAt,
-        normalizedId: data.normalizedId,
-        isDeleted: data.isDeleted || false,
-        rawPayload: data.rawPayload,
-        payloadHash: data.payloadHash,
-        lastSeenAt: new Date(),
-        updatedAt: new Date(),
-      },
-      create: {
-        connectionId: data.connectionId,
-        source: data.source,
-        externalObjectType: data.externalObjectType,
-        externalId: data.externalId,
-        externalVersion: data.externalVersion,
-        sourceUpdatedAt: data.sourceUpdatedAt,
-        normalizedType: data.normalizedType,
-        normalizedId: data.normalizedId,
-        isDeleted: data.isDeleted || false,
-        rawPayload: data.rawPayload,
-        payloadHash: data.payloadHash,
-      },
-    });
+    const id = uuidv4().replace(/-/g, '').substring(0, 24);
+    const now = new Date();
+
+    try {
+      await execute(
+        `INSERT INTO external_records (id, connection_id, object_type, external_id, data, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (connection_id, object_type, external_id) DO UPDATE
+         SET data = $5, updated_at = $7`,
+        [id, data.connectionId, data.objectType, data.externalId, JSON.stringify(data.data), now, now]
+      );
+    } catch (error) {
+      // Update if insert failed (conflict)
+      await execute(
+        `UPDATE external_records SET data = $1, updated_at = $2 
+         WHERE connection_id = $3 AND object_type = $4 AND external_id = $5`,
+        [JSON.stringify(data.data), now, data.connectionId, data.objectType, data.externalId]
+      );
+    }
+
+    return (await queryOne<ExternalRecord>(
+      `SELECT * FROM external_records WHERE connection_id = $1 AND object_type = $2 AND external_id = $3`,
+      [data.connectionId, data.objectType, data.externalId]
+    ))!;
   }
 
   /**
-   * Get external record by source identity
+   * Get records needing sync
+   */
+  async getRecordsNeedingSync(connectionId: string): Promise<ExternalRecord[]> {
+    return query<ExternalRecord>(
+      `SELECT * FROM external_records WHERE connection_id = $1 AND (synced_at IS NULL OR updated_at > synced_at)
+       ORDER BY updated_at LIMIT 1000`,
+      [connectionId]
+    );
+  }
+
+  /**
+   * Get a specific external record
    */
   async getExternalRecord(
     connectionId: string,
-    externalObjectType: string,
+    objectType: string,
     externalId: string
   ): Promise<ExternalRecord | null> {
-    return prisma.externalRecord.findUnique({
-      where: {
-        connectionId_externalObjectType_externalId: {
-          connectionId,
-          externalObjectType,
-          externalId,
-        },
-      },
-    });
+    return queryOne<ExternalRecord>(
+      `SELECT * FROM external_records WHERE connection_id = $1 AND object_type = $2 AND external_id = $3`,
+      [connectionId, objectType, externalId]
+    );
   }
 
   /**
-   * Get all records for a normalized ID
+   * Mark records as synced
    */
-  async getByNormalizedId(normalizedId: string): Promise<ExternalRecord[]> {
-    return prisma.externalRecord.findMany({
-      where: { normalizedId },
-    });
-  }
+  async markRecordsSynced(recordIds: string[]): Promise<void> {
+    if (recordIds.length === 0) return;
 
-  /**
-   * Get records for a connection and type
-   */
-  async getRecordsByConnection(
-    connectionId: string,
-    externalObjectType?: string
-  ): Promise<ExternalRecord[]> {
-    return prisma.externalRecord.findMany({
-      where: {
-        connectionId,
-        ...(externalObjectType && { externalObjectType }),
-      },
-    });
-  }
-
-  /**
-   * Mark record as deleted/soft-delete
-   */
-  async markDeleted(externalRecordId: string): Promise<ExternalRecord> {
-    return prisma.externalRecord.update({
-      where: { id: externalRecordId },
-      data: {
-        isDeleted: true,
-        updatedAt: new Date(),
-      },
-    });
-  }
-
-  /**
-   * Count records by connection
-   */
-  async countByConnection(connectionId: string): Promise<number> {
-    return prisma.externalRecord.count({
-      where: { connectionId },
-    });
+    const placeholders = recordIds.map((_, i) => `$${i + 1}`).join(',');
+    await execute(
+      `UPDATE external_records SET synced_at = NOW() WHERE id IN (${placeholders})`,
+      recordIds
+    );
   }
 }
 
