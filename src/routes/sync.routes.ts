@@ -3,6 +3,7 @@ import { adminAuthGuard, demoModeGuard } from '../security/admin-auth';
 import { syncOrchestrator } from '../sync/orchestrator';
 import { syncRunRepository } from '../db/repositories/sync-run.repository';
 import { externalRecordRepository } from '../db/repositories/external-record.repository';
+import { sourceConnectionRepository } from '../db/repositories/source-connection.repository';
 import { SourceType } from '../sync/types';
 import { getLogger } from '../observability/logger';
 
@@ -23,6 +24,16 @@ export async function registerSyncRoutes(app: FastifyInstance) {
         ['HUBSPOT', 'hubspot-connection-1'],
         ['STRIPE', 'stripe-connection-1'],
         ['GOOGLE_CALENDAR', 'google-calendar-connection-1'],
+      ]);
+
+      await sourceConnectionRepository.ensureConnections([
+        { id: 'hubspot-connection-1', source: 'HUBSPOT', accountExternalId: 'default' },
+        { id: 'stripe-connection-1', source: 'STRIPE', accountExternalId: 'default' },
+        {
+          id: 'google-calendar-connection-1',
+          source: 'GOOGLE_CALENDAR',
+          accountExternalId: 'default',
+        },
       ]);
 
       const runId = await syncOrchestrator.triggerSync(connectionIds);

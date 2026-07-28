@@ -20,11 +20,12 @@ process.stdout.write(`[STARTUP] Time: ${new Date().toISOString()}\n`);
 // Check critical env vars FIRST
 const criticalVars = [
   'DATABASE_URL',
+  'DIRECT_URL',
   'ADMIN_API_KEY',
   'CREDENTIAL_ENCRYPTION_KEY',
 ];
 
-process.stdout.write('[STARTUP] Checking 3 critical environment variables:\n');
+process.stdout.write(`[STARTUP] Checking ${criticalVars.length} critical environment variables:\n`);
 const missingVars: string[] = [];
 
 criticalVars.forEach(varName => {

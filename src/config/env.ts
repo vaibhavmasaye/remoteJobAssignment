@@ -10,15 +10,15 @@ const EnvSchema = z.object({
   ENABLE_DEMO_FAILURE_INJECTION: z.coerce.boolean().default(false),
 
   // Database
-  DATABASE_URL: z.string().url('Must be a valid PostgreSQL connection string').default('postgresql://vaibhav:fBghRUbLBrc7NilvWTC05uukMCJxt7Ur@dpg-d9kcnve417fc73ektsk0-a.oregon-postgres.render.com:5432/remotejobv1?sslmode=require'),
-  DIRECT_URL: z.string().url('Must be a valid PostgreSQL connection string').default('postgresql://vaibhav:fBghRUbLBrc7NilvWTC05uukMCJxt7Ur@dpg-d9kcnve417fc73ektsk0-a.oregon-postgres.render.com:5432/remotejobv1?sslmode=require'),
+  DATABASE_URL: z.string().url('Must be a valid PostgreSQL connection string'),
+  DIRECT_URL: z.string().url('Must be a valid PostgreSQL connection string'),
   DB_SSL: z.coerce.boolean().default(true),
   DB_CONNECTION_LIMIT: z.coerce.number().default(5),
   DB_CONNECT_TIMEOUT_SECONDS: z.coerce.number().default(10),
 
   // Security
-  ADMIN_API_KEY: z.string().min(32, 'Must be at least 32 characters').default('sync-pipeline-admin-key-secure-random-token-123456789abcdef'),
-  CREDENTIAL_ENCRYPTION_KEY: z.string().min(32, 'Must be at least 32 characters').default('sync-pipeline-encryption-key-secure-random-token-123456'),
+  ADMIN_API_KEY: z.string().min(32, 'Must be at least 32 characters'),
+  CREDENTIAL_ENCRYPTION_KEY: z.string().min(32, 'Must be at least 32 characters'),
   ADMIN_IP_ALLOWLIST: z.string().optional(),
 
   // Sync configuration
