@@ -1,8 +1,11 @@
 # 🚀 Render Environment Setup - Copy & Paste Ready
 
+⚠️ **IMPORTANT: Stripe API key is REQUIRED for this assignment.**
+See `STRIPE_REQUIREMENT_ANALYSIS.md` for details on how to get it for FREE.
+
 ## ✅ REQUIRED Variables (For Assignment)
 
-**Copy these 16 variables to Render Dashboard** (get actual values from your `.env` file):
+**Copy these 17 variables to Render Dashboard** (get actual values from your `.env` file):
 
 ```
 NODE_ENV=production
@@ -23,6 +26,8 @@ HUBSPOT_ACCESS_TOKEN=YOUR_HUBSPOT_ACCESS_TOKEN_FROM_ENV
 HUBSPOT_CLIENT_SECRET=YOUR_HUBSPOT_CLIENT_SECRET_FROM_ENV
 HUBSPOT_PORTAL_ID=YOUR_HUBSPOT_PORTAL_ID_FROM_ENV
 
+STRIPE_SECRET_KEY=YOUR_STRIPE_SECRET_KEY_FROM_ENV
+
 GOOGLE_CLIENT_ID=YOUR_GOOGLE_CLIENT_ID_FROM_ENV
 GOOGLE_CLIENT_SECRET=YOUR_GOOGLE_CLIENT_SECRET_FROM_ENV
 GOOGLE_REFRESH_TOKEN=YOUR_GOOGLE_REFRESH_TOKEN_FROM_ENV
@@ -37,20 +42,27 @@ HEALTH_CHECK_DATABASE=true
 
 ---
 
-## ❌ DO NOT ADD These (Optional - Leave Empty)
+## ⚠️ STRIPE IS REQUIRED ⚠️
 
-These are NOT required for the assignment:
+**IMPORTANT: Stripe is a REQUIRED integration, not optional!**
+
+See `STRIPE_REQUIREMENT_ANALYSIS.md` for details.
+
+| Variable | Status |
+|----------|--------|
+| `STRIPE_SECRET_KEY` | ✅ **REQUIRED** for assignment |
+| `STRIPE_WEBHOOK_SECRET` | ❌ Optional (webhooks only) |
+
+---
+
+## ❌ DO NOT ADD These (Truly Optional)
 
 | Variable | Why Not Needed |
 |----------|----------------|
-| `STRIPE_SECRET_KEY` | Not part of assignment (HubSpot + Google Calendar only) |
-| `STRIPE_WEBHOOK_SECRET` | Not part of assignment |
 | `GOOGLE_WEBHOOK_TOKEN` | Webhook push notifications - optional |
 | `GOOGLE_WEBHOOK_CHANNEL_ID` | Webhook push notifications - optional |
 | `GOOGLE_CALENDAR_TIME_MIN` | Optional event filtering |
 | `SENTRY_DSN` | Optional error tracking |
-| `HUBSPOT_WEBHOOK_ENABLED` | Set to false in code |
-| `STRIPE_ENABLED` | Will be skipped without API keys |
 
 ---
 
