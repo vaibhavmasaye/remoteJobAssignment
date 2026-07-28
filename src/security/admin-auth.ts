@@ -59,7 +59,10 @@ export async function adminAuthGuard(request: FastifyRequest, reply: FastifyRepl
     const allowedIPs = config.ADMIN_IP_ALLOWLIST.split(',').map((ip) => ip.trim());
     const clientIP = request.ip;
 
-    if (!allowedIPs.includes(clientIP)) {
+    // Allow all IPs if allowlist contains "*"
+    const allowAll = allowedIPs.includes('*');
+
+    if (!allowAll && !allowedIPs.includes(clientIP)) {
       logger.warn({ ip: clientIP, allowedIPs }, 'IP not in allowlist');
       return reply.code(403).send({
         error: 'Forbidden',
