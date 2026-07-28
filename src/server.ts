@@ -3,6 +3,14 @@ import { getLogger } from './observability/logger';
 import { createApp } from './app';
 import { initializeDatabase } from './db';
 
+process.on('uncaughtException', (error) => {
+  process.stderr.write(`[STARTUP] UNCAUGHT EXCEPTION: ${error.stack || error.message}\n`);
+});
+
+process.on('unhandledRejection', (reason) => {
+  process.stderr.write(`[STARTUP] UNHANDLED REJECTION: ${String(reason)}\n`);
+});
+
 // Ensure logs are flushed immediately
 process.stdout.write('[STARTUP] ================================\n');
 process.stdout.write('[STARTUP] Application starting...\n');
@@ -53,33 +61,6 @@ async function start() {
     const logger = getLogger('server');
 
     process.stdout.write('[STARTUP] \n');
-    process.stdout.write('[STARTUP] Testing database connection...\n');
-    try {
-      const { checkConnection } = await import('./db');
-      const isConnected = await checkConnection();
-      if (!isConnected) {
-        throw new Error('Database connection check returned false');
-      }
-      process.stdout.write('[STARTUP] ✅ Database connection successful\n');
-    } catch (connError: any) {
-      process.stderr.write('[STARTUP] ❌ Database connection failed\n');
-      process.stderr.write(`[STARTUP] Error: ${connError?.message}\n`);
-      throw connError;
-    }
-
-    process.stdout.write('[STARTUP] \n');
-    process.stdout.write('[STARTUP] Initializing database schema...\n');
-    try {
-      await initializeDatabase();
-      process.stdout.write('[STARTUP] ✅ Database initialized\n');
-    } catch (dbError: any) {
-      process.stderr.write('[STARTUP] ❌ Database initialization failed\n');
-      process.stderr.write(`[STARTUP] Error message: ${dbError?.message}\n`);
-      process.stderr.write(`[STARTUP] Error code: ${dbError?.code}\n`);
-      throw dbError;
-    }
-    
-    process.stdout.write('[STARTUP] \n');
     process.stdout.write('[STARTUP] Creating Fastify application...\n');
     const app = await createApp();
     
@@ -90,6 +71,17 @@ async function start() {
     process.stdout.write('[STARTUP] \n');
     process.stdout.write('[STARTUP] ✅✅✅ SERVER STARTED SUCCESSFULLY ✅✅✅\n');
     process.stdout.write('[STARTUP] \n');
+
+    // Database availability must not prevent Render from binding the web port.
+    // Readiness continues to report 503 when the database is unavailable.
+    void initializeDatabase()
+      .then(() => {
+        process.stdout.write('[STARTUP] ✅ Database initialized\n');
+      })
+      .catch((dbError: any) => {
+        process.stderr.write('[STARTUP] ❌ Database initialization failed\n');
+        process.stderr.write(`[STARTUP] Error: ${dbError?.message || String(dbError)}\n`);
+      });
   } catch (error: any) {
     process.stderr.write('[STARTUP] \n');
     process.stderr.write('[STARTUP] ❌ STARTUP FAILED\n');
@@ -106,11 +98,5 @@ async function start() {
     }, 100);
   }
 }
-
-// Set a global timeout in case something hangs
-setTimeout(() => {
-  process.stderr.write('[STARTUP] ❌ TIMEOUT: Application did not start within 30 seconds\n');
-  process.exit(1);
-}, 30000);
 
 start();
