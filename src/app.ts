@@ -14,6 +14,8 @@ const config = getConfig();
 const logger = getLogger('app');
 
 export async function createApp() {
+  logger.info('Creating Fastify app instance...');
+  
   const fastify = Fastify({
     logger: false, // We use pino directly
     trustProxy: config.TRUST_PROXY,
@@ -22,18 +24,23 @@ export async function createApp() {
     disableRequestLogging: false,
   });
 
+  logger.info('Initializing rate limiter...');
   // Initialize rate limiter (100 requests per minute by default)
   createRateLimiter(60000, 100);
 
+  logger.info('Registering error handler...');
   // Register global error handler
   await registerErrorHandler(fastify);
 
+  logger.info('Registering security headers...');
   // Register security headers plugin
   await registerSecurityHeadersPlugin(fastify);
 
+  logger.info('Adding rate limit hook...');
   // Apply rate limiter to all routes
   fastify.addHook('preHandler', rateLimitHandler);
 
+  logger.info('Registering health check endpoints...');
   // Health check endpoint
   fastify.get('/health/live', async (_request, reply) => {
     return reply.code(200).send({ status: 'ok' });
@@ -43,6 +50,7 @@ export async function createApp() {
   fastify.get('/health/ready', async (_request, reply) => {
     try {
       if (config.HEALTH_CHECK_DATABASE) {
+        logger.debug('Checking database connection...');
         await prisma.$queryRaw`SELECT 1`;
       }
       return reply.code(200).send({
@@ -96,9 +104,11 @@ export async function createApp() {
     });
   });
 
+  logger.info('Registering sync routes...');
   // Register sync routes
   await registerSyncRoutes(fastify);
 
+  logger.info('Setting up graceful shutdown handlers...');
   // Graceful shutdown
   const signals = ['SIGTERM', 'SIGINT'];
   signals.forEach((signal) => {
@@ -115,5 +125,6 @@ export async function createApp() {
     });
   });
 
+  logger.info('✅ App created successfully');
   return fastify;
 }

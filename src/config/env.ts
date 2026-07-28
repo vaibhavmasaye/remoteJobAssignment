@@ -87,7 +87,27 @@ export function getConfig(): EnvConfig {
     const result = EnvSchema.safeParse(process.env);
     if (!result.success) {
       const formatted = result.error.format();
-      console.error('Configuration validation failed:', JSON.stringify(formatted, null, 2));
+      
+      // Log all environment variable issues for debugging
+      console.error('=== CONFIGURATION VALIDATION FAILED ===');
+      console.error('Issues found:');
+      Object.entries(formatted).forEach(([key, value]: [string, any]) => {
+        if (value && value._errors) {
+          console.error(`❌ ${key}: ${value._errors.join(', ')}`);
+        }
+      });
+      console.error('=== END ERRORS ===\n');
+      
+      // Also log what env vars ARE set (redacted for sensitive ones)
+      console.error('Currently set environment variables:');
+      const sensitiveKeys = ['PASSWORD', 'TOKEN', 'KEY', 'SECRET', 'URL'];
+      Object.entries(process.env).forEach(([key, value]) => {
+        const isSensitive = sensitiveKeys.some(s => key.includes(s));
+        const displayValue = isSensitive ? '***' : value;
+        console.error(`  ${key}=${displayValue}`);
+      });
+      console.error('=== END ENV VARS ===\n');
+      
       process.exit(1);
     }
     config = result.data;
