@@ -84,7 +84,9 @@ let config: EnvConfig | null = null;
 
 export function getConfig(): EnvConfig {
   if (!config) {
+    console.log('[CONFIG] Parsing environment variables...');
     const result = EnvSchema.safeParse(process.env);
+    
     if (!result.success) {
       const formatted = result.error.format();
       
@@ -102,15 +104,18 @@ export function getConfig(): EnvConfig {
       console.error('Currently set environment variables:');
       const sensitiveKeys = ['PASSWORD', 'TOKEN', 'KEY', 'SECRET', 'URL'];
       Object.entries(process.env).forEach(([key, value]) => {
-        const isSensitive = sensitiveKeys.some(s => key.includes(s));
-        const displayValue = isSensitive ? '***' : value;
-        console.error(`  ${key}=${displayValue}`);
+        if (key.startsWith('DATABASE_') || key.startsWith('ADMIN_') || key.startsWith('HUBSPOT_') || key.startsWith('STRIPE_') || key.startsWith('GOOGLE_')) {
+          const isSensitive = sensitiveKeys.some(s => key.includes(s));
+          const displayValue = isSensitive ? '***' : (value ? value.substring(0, 20) + (value.length > 20 ? '...' : '') : 'EMPTY');
+          console.error(`  ${key}=${displayValue}`);
+        }
       });
       console.error('=== END ENV VARS ===\n');
       
-      process.exit(1);
+      throw new Error(`Configuration validation failed. See errors above.`);
     }
     config = result.data;
+    console.log('[CONFIG] ✅ Configuration loaded successfully');
   }
   return config;
 }
