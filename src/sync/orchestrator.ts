@@ -14,6 +14,7 @@ const config = getConfig();
 export interface SyncOptions {
   source?: SourceType;
   mode?: 'full' | 'incremental';
+  background?: boolean;
   maxPages?: number;
   pageSize?: number;
 }
@@ -45,15 +46,19 @@ export class SyncOrchestrator {
       'Starting sync run'
     );
 
-    void this.executeSync(syncRun.id, connectionIds, options).catch(async (error) => {
-      logger.error({ error, runId: syncRun.id }, 'Background sync execution failed');
-      try {
-        const sourceRuns = await syncRunRepository.getSyncRunSources(syncRun.id);
-        await syncRunRepository.finalizeSyncRun(syncRun.id, sourceRuns);
-      } catch (finalizeError) {
-        logger.error({ error: finalizeError, runId: syncRun.id }, 'Failed to finalize sync run');
-      }
-    });
+    if (options.background) {
+      void this.executeSync(syncRun.id, connectionIds, options).catch(async (error) => {
+        logger.error({ error, runId: syncRun.id }, 'Background sync execution failed');
+        try {
+          const sourceRuns = await syncRunRepository.getSyncRunSources(syncRun.id);
+          await syncRunRepository.finalizeSyncRun(syncRun.id, sourceRuns);
+        } catch (finalizeError) {
+          logger.error({ error: finalizeError, runId: syncRun.id }, 'Failed to finalize sync run');
+        }
+      });
+    } else {
+      await this.executeSync(syncRun.id, connectionIds, options);
+    }
 
     return syncRun.id;
   }
