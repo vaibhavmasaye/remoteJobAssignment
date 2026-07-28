@@ -3,6 +3,12 @@ import { getConfig } from './config/env';
 import { getLogger } from './observability/logger';
 import { prisma } from './db/prisma';
 import { registerSyncRoutes } from './routes/sync.routes';
+import {
+  createRateLimiter,
+  registerSecurityHeadersPlugin,
+  registerErrorHandler,
+  rateLimitHandler,
+} from './middleware';
 
 const config = getConfig();
 const logger = getLogger('app');
@@ -12,7 +18,21 @@ export async function createApp() {
     logger: false, // We use pino directly
     trustProxy: config.TRUST_PROXY,
     bodyLimit: config.REQUEST_BODY_LIMIT_BYTES,
+    requestIdLogLabel: 'requestId',
+    disableRequestLogging: false,
   });
+
+  // Initialize rate limiter (100 requests per minute by default)
+  createRateLimiter(60000, 100);
+
+  // Register global error handler
+  await registerErrorHandler(fastify);
+
+  // Register security headers plugin
+  await registerSecurityHeadersPlugin(fastify);
+
+  // Apply rate limiter to all routes
+  fastify.addHook('preHandler', rateLimitHandler);
 
   // Health check endpoint
   fastify.get('/health/live', async (_request, reply) => {
@@ -84,6 +104,11 @@ export async function createApp() {
   signals.forEach((signal) => {
     process.on(signal, async () => {
       logger.info(`Received ${signal}, gracefully shutting down...`);
+      
+      // Import here to avoid circular dependency
+      const { stopRateLimiter } = await import('./middleware');
+      stopRateLimiter();
+      
       await fastify.close();
       await prisma.$disconnect();
       process.exit(0);
