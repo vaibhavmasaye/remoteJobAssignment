@@ -55,8 +55,8 @@ USER nodejs
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD node -e "require('http').get('http://localhost:3000/health/live', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"
 
-# Expose port
-EXPOSE 3000
+# Expose port (flexible for Render)
+EXPOSE 3000 10000
 
 # Use dumb-init to handle signals properly
 ENTRYPOINT ["/usr/sbin/dumb-init", "--"]

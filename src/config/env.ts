@@ -5,7 +5,7 @@ const EnvSchema = z.object({
   // Application
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(3000),
-  APP_BASE_URL: z.string().url(),
+  APP_BASE_URL: z.string().url().default('http://localhost:3000'),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
   ENABLE_DEMO_FAILURE_INJECTION: z.coerce.boolean().default(false),
 
