@@ -1,3 +1,3 @@
 export { initializeDatabase } from './init';
-export { query, queryOne, execute, checkConnection, closePool, getClient } from './connection';
+export { prisma, checkConnection, closePool } from './connection';
 export * from './repositories';

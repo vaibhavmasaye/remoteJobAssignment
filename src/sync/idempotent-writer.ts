@@ -86,7 +86,7 @@ export class IdempotentWriter {
     }
 
     // Upsert external record
-    await externalRecordRepository.upsertRecord({
+    const externalRecord = await externalRecordRepository.upsertRecord({
       connectionId,
       objectType: record.externalObjectType,
       externalId: record.externalId,
@@ -94,7 +94,7 @@ export class IdempotentWriter {
     });
 
     // Write to normalized type-specific table
-    await this.writeNormalizedData(record);
+    await this.writeNormalizedData(record, externalRecord.id);
 
     logger.debug(
       { externalId: record.externalId, source, normalizedId: record.normalizedId },
@@ -107,7 +107,7 @@ export class IdempotentWriter {
   /**
    * Write to type-specific normalized table
    */
-  private async writeNormalizedData(record: NormalizedRecord): Promise<void> {
+  private async writeNormalizedData(record: NormalizedRecord, externalRecordId: string): Promise<void> {
     switch (record.normalizedType) {
       case 'PERSON':
       case 'PAYMENT':
@@ -116,7 +116,7 @@ export class IdempotentWriter {
           source: 'unknown',
           entityType: record.normalizedType,
           entityData: record.data,
-          externalRecordId: record.externalId,
+          externalRecordId,
         });
         break;
 
