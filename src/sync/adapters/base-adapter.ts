@@ -1,5 +1,4 @@
 import { SourceAdapter, SyncContext, SourcePage, CheckpointState } from '../types';
-import { getLogger } from '../../observability/logger';
 import { withTimeout } from '../retry';
 
 /**
@@ -7,10 +6,6 @@ import { withTimeout } from '../retry';
  */
 export abstract class BaseAdapter implements SourceAdapter {
   abstract source: any;
-
-  protected getLogger(label: string) {
-    return getLogger(label);
-  }
 
   /**
    * Abstract methods to implement by subclasses
