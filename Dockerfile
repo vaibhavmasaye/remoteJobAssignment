@@ -17,6 +17,9 @@ COPY src ./src
 # Generate Prisma Client
 RUN npm exec prisma generate -- --schema prisma/schema.prisma
 
+# Create index.ts for Prisma exports (Prisma doesn't generate this)
+RUN echo "export * from './client';" > src/generated/prisma/index.ts
+
 # Build 
 RUN npm run build
 
