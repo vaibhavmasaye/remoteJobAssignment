@@ -51,17 +51,34 @@ export class SyncRunRepository {
     source: string;
     mode: string;
   }): Promise<SourceSyncRun> {
-    return prisma.sourceSyncRun.create({
-      data: {
-        id: uuidv4().replace(/-/g, '').substring(0, 24),
-        syncRunId: data.syncRunId,
-        connectionId: data.connectionId,
-        source: data.source,
-        mode: data.mode,
-        status: 'RUNNING',
-        startedAt: new Date(),
-      },
-    }) as unknown as Promise<SourceSyncRun>;
+    const sourceRun = await prisma.$transaction(async (transaction) => {
+      // Enforce the foreign-key invariant at the write boundary. This also
+      // protects non-HTTP callers that bypass route-level connection setup.
+      await transaction.sourceConnection.upsert({
+        where: { id: data.connectionId },
+        update: { source: data.source, status: 'ACTIVE' },
+        create: {
+          id: data.connectionId,
+          source: data.source,
+          accountExternalId: data.connectionId,
+          status: 'ACTIVE',
+        },
+      });
+
+      return transaction.sourceSyncRun.create({
+        data: {
+          id: uuidv4().replace(/-/g, '').substring(0, 24),
+          syncRunId: data.syncRunId,
+          connectionId: data.connectionId,
+          source: data.source,
+          mode: data.mode,
+          status: 'RUNNING',
+          startedAt: new Date(),
+        },
+      });
+    });
+
+    return sourceRun as unknown as SourceSyncRun;
   }
 
   async updateSourceSyncRun(
@@ -86,10 +103,11 @@ export class SyncRunRepository {
   }
 
   async finalizeSyncRun(syncRunId: string, sources: SourceSyncRun[]): Promise<SyncRun> {
-    const allSuccess = sources.every((source) => source.status === 'SUCCESS');
+    const allSuccess = sources.length > 0 && sources.every((source) => source.status === 'SUCCESS');
     const anySuccess = sources.some((source) => source.status === 'SUCCESS');
     const status = allSuccess ? 'SUCCESS' : anySuccess ? 'PARTIAL_SUCCESS' : 'FAILED';
     const summary = {
+      sourceCount: sources.length,
       sources: sources.map(({ source, status, recordCount, errorMessage }) => ({
         source,
         status,
