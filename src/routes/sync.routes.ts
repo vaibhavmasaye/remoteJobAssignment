@@ -20,10 +20,11 @@ export async function registerSyncRoutes(app: FastifyInstance) {
     try {
       const idempotencyKey = request.headers['idempotency-key'] as string | undefined;
       const requestBody = request.body as
-        | { source?: SourceType; mode?: 'full' | 'incremental' }
+        | { source?: SourceType; mode?: 'full' | 'incremental'; background?: boolean }
         | undefined;
       const requestedSource = requestBody?.source;
       const requestedMode = requestBody?.mode;
+      const runInBackground = requestBody?.background === true;
       const validSources: SourceType[] = ['HUBSPOT', 'STRIPE', 'GOOGLE_CALENDAR'];
 
       if (requestedSource && !validSources.includes(requestedSource)) {
@@ -52,13 +53,45 @@ export async function registerSyncRoutes(app: FastifyInstance) {
       const runId = await syncOrchestrator.triggerSync(connectionIds, {
         source: requestedSource,
         mode: requestedMode,
+        background: runInBackground,
       });
 
-      return reply.code(202).send({
-        status: 'accepted',
+      if (runInBackground) {
+        return reply.code(202).send({
+          status: 'accepted',
+          runId,
+          idempotencyKey,
+          message: 'Sync run initiated',
+        });
+      }
+
+      const completedRun = await syncRunRepository.getSyncRun(runId);
+      if (!completedRun) {
+        throw new Error(`Completed sync run ${runId} could not be loaded`);
+      }
+
+      const statusCode =
+        completedRun.status === 'SUCCESS'
+          ? 200
+          : completedRun.status === 'PARTIAL_SUCCESS'
+            ? 207
+            : 502;
+
+      return reply.code(statusCode).send({
+        status: completedRun.status,
         runId,
         idempotencyKey,
-        message: 'Sync run initiated',
+        startedAt: completedRun.startedAt,
+        finishedAt: completedRun.finishedAt,
+        durationMs: calculateDurationMs(completedRun.startedAt, completedRun.finishedAt),
+        durationSeconds: Number(
+          (calculateDurationMs(completedRun.startedAt, completedRun.finishedAt) / 1000).toFixed(2)
+        ),
+        summary: completedRun.summary,
+        message:
+          completedRun.status === 'SUCCESS'
+            ? 'Sync completed successfully'
+            : 'Sync completed with source failures',
       });
     } catch (error) {
       logger.error({ error }, 'Sync trigger failed');
