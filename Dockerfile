@@ -18,7 +18,11 @@ COPY src ./src
 RUN npm exec prisma generate -- --schema prisma/schema.prisma
 
 # Create index.ts for Prisma exports (Prisma doesn't generate this)
-RUN echo "export * from './client';" > src/generated/prisma/index.ts
+# This MUST be before npm run build
+RUN mkdir -p src/generated/prisma && echo "export * from './client';" > src/generated/prisma/index.ts
+
+# Verify index.ts was created
+RUN test -f src/generated/prisma/index.ts && echo "✅ index.ts created" || (echo "❌ index.ts NOT found" && exit 1)
 
 # Build 
 RUN npm run build
