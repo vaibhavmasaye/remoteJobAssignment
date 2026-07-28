@@ -34,9 +34,25 @@ export abstract class BaseAdapter implements SourceAdapter {
       fetch(url, {
         ...options,
         signal: mergedSignal,
-      }).then((res) => {
+      }).then(async (res) => {
         if (!res.ok) {
-          throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+          const responseText = await res.text();
+          let responseData: unknown = responseText;
+          try {
+            responseData = responseText ? JSON.parse(responseText) : undefined;
+          } catch {
+            // Preserve a non-JSON upstream response as text.
+          }
+
+          const upstreamMessage =
+            typeof responseData === 'object' && responseData !== null && 'message' in responseData
+              ? String((responseData as { message: unknown }).message)
+              : responseText;
+          const error = new Error(
+            `HTTP ${res.status}: ${upstreamMessage || res.statusText}`
+          ) as Error & { response: { status: number; data: unknown } };
+          error.response = { status: res.status, data: responseData };
+          throw error;
         }
         return res.json() as Promise<T>;
       }),

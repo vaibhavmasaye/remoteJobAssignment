@@ -3,7 +3,6 @@ import { NormalizedRecord } from './types';
 import { normalizedRepository } from '../db/repositories';
 import { externalRecordRepository } from '../db/repositories';
 import { failedRecordRepository } from '../db/repositories';
-import { NormalizedType } from './types';
 import crypto from 'crypto';
 
 const logger = getLogger('idempotent-writer');
@@ -66,21 +65,18 @@ export class IdempotentWriter {
     source: string,
     record: NormalizedRecord
   ): Promise<boolean> {
-    // Compute hash for change detection
-    const hash = this.computeHash(record.data);
-
-    // Check if we've seen this exact version before
+    // Find the stable source identity, then compare content rather than merely
+    // treating every existing ID as unchanged.
     const existing = await externalRecordRepository.getExternalRecord(
       connectionId,
       record.externalObjectType,
       record.externalId
     );
 
-    // If we've seen this before, skip
-    if (existing) {
+    if (existing && this.computeHash(existing.data) === this.computeHash(record.data)) {
       logger.debug(
         { externalId: record.externalId, source },
-        'Record found, skipping'
+        'Record unchanged, skipping'
       );
       return false;
     }
@@ -94,7 +90,7 @@ export class IdempotentWriter {
     });
 
     // Write to normalized type-specific table
-    await this.writeNormalizedData(record, externalRecord.id);
+    await this.writeNormalizedData(record, externalRecord.id, source);
 
     logger.debug(
       { externalId: record.externalId, source, normalizedId: record.normalizedId },
@@ -107,13 +103,17 @@ export class IdempotentWriter {
   /**
    * Write to type-specific normalized table
    */
-  private async writeNormalizedData(record: NormalizedRecord, externalRecordId: string): Promise<void> {
+  private async writeNormalizedData(
+    record: NormalizedRecord,
+    externalRecordId: string,
+    source: string
+  ): Promise<void> {
     switch (record.normalizedType) {
       case 'PERSON':
       case 'PAYMENT':
       case 'CALENDAR_EVENT':
-        await normalizedRepository.create({
-          source: 'unknown',
+        await normalizedRepository.upsertByExternalRecord({
+          source,
           entityType: record.normalizedType,
           entityData: record.data,
           externalRecordId,

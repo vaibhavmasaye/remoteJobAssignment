@@ -163,16 +163,8 @@ export class HubSpotAdapter extends BaseAdapter implements SourceAdapter {
               ],
             },
           ],
-          sorts: [
-            {
-              propertyName: 'hs_lastmodifieddate',
-              direction: 'ASCENDING',
-            },
-            {
-              propertyName: 'id',
-              direction: 'ASCENDING',
-            },
-          ],
+          // HubSpot search expects property-name strings and allows one sort.
+          sorts: ['hs_lastmodifieddate'],
           properties: this.contactProperties,
           limit: this.pageSize,
           after,

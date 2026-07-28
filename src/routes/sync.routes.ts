@@ -3,11 +3,14 @@ import { adminAuthGuard, demoModeGuard } from '../security/admin-auth';
 import { syncOrchestrator } from '../sync/orchestrator';
 import { syncRunRepository } from '../db/repositories/sync-run.repository';
 import { externalRecordRepository } from '../db/repositories/external-record.repository';
-import { sourceConnectionRepository } from '../db/repositories/source-connection.repository';
 import { SourceType } from '../sync/types';
 import { getLogger } from '../observability/logger';
 
 const logger = getLogger('sync-routes');
+
+function calculateDurationMs(startedAt: Date, finishedAt?: Date): number {
+  return Math.max(0, (finishedAt || new Date()).getTime() - startedAt.getTime());
+}
 
 export async function registerSyncRoutes(app: FastifyInstance) {
   /**
@@ -16,6 +19,26 @@ export async function registerSyncRoutes(app: FastifyInstance) {
   app.post('/api/v1/sync', { preHandler: adminAuthGuard }, async (request, reply) => {
     try {
       const idempotencyKey = request.headers['idempotency-key'] as string | undefined;
+      const requestBody = request.body as
+        | { source?: SourceType; mode?: 'full' | 'incremental' }
+        | undefined;
+      const requestedSource = requestBody?.source;
+      const requestedMode = requestBody?.mode;
+      const validSources: SourceType[] = ['HUBSPOT', 'STRIPE', 'GOOGLE_CALENDAR'];
+
+      if (requestedSource && !validSources.includes(requestedSource)) {
+        return reply.code(400).send({
+          error: 'Bad request',
+          message: `source must be one of: ${validSources.join(', ')}`,
+        });
+      }
+
+      if (requestedMode && !['full', 'incremental'].includes(requestedMode)) {
+        return reply.code(400).send({
+          error: 'Bad request',
+          message: 'mode must be either: full, incremental',
+        });
+      }
 
       logger.info({ idempotencyKey }, 'Sync requested');
 
@@ -26,17 +49,10 @@ export async function registerSyncRoutes(app: FastifyInstance) {
         ['GOOGLE_CALENDAR', 'google-calendar-connection-1'],
       ]);
 
-      await sourceConnectionRepository.ensureConnections([
-        { id: 'hubspot-connection-1', source: 'HUBSPOT', accountExternalId: 'default' },
-        { id: 'stripe-connection-1', source: 'STRIPE', accountExternalId: 'default' },
-        {
-          id: 'google-calendar-connection-1',
-          source: 'GOOGLE_CALENDAR',
-          accountExternalId: 'default',
-        },
-      ]);
-
-      const runId = await syncOrchestrator.triggerSync(connectionIds);
+      const runId = await syncOrchestrator.triggerSync(connectionIds, {
+        source: requestedSource,
+        mode: requestedMode,
+      });
 
       return reply.code(202).send({
         status: 'accepted',
@@ -71,6 +87,8 @@ export async function registerSyncRoutes(app: FastifyInstance) {
           triggerType: run.triggerType,
           startedAt: run.startedAt,
           finishedAt: run.finishedAt,
+          durationMs: calculateDurationMs(run.startedAt, run.finishedAt),
+          durationSeconds: Number((calculateDurationMs(run.startedAt, run.finishedAt) / 1000).toFixed(2)),
           summary: run.summary,
         })),
       });
@@ -106,6 +124,8 @@ export async function registerSyncRoutes(app: FastifyInstance) {
         triggerType: run.triggerType,
         startedAt: run.startedAt,
         finishedAt: run.finishedAt,
+        durationMs: calculateDurationMs(run.startedAt, run.finishedAt),
+        durationSeconds: Number((calculateDurationMs(run.startedAt, run.finishedAt) / 1000).toFixed(2)),
         requestedBy: run.requestedBy,
         summary: run.summary,
         sources: sourceSyncRuns?.map((s) => ({
@@ -117,6 +137,8 @@ export async function registerSyncRoutes(app: FastifyInstance) {
           errorMessage: s.errorMessage,
           startedAt: s.startedAt,
           finishedAt: s.finishedAt,
+          durationMs: calculateDurationMs(s.startedAt, s.finishedAt),
+          durationSeconds: Number((calculateDurationMs(s.startedAt, s.finishedAt) / 1000).toFixed(2)),
         })),
       });
     } catch (error) {

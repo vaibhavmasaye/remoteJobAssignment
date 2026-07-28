@@ -6,8 +6,10 @@ import { hubspotAdapter } from './adapters/hubspot.adapter';
 import { stripeAdapter } from './adapters/stripe.adapter';
 import { googleCalendarAdapter } from './adapters/google-calendar.adapter';
 import { SourceType } from './types';
+import { getConfig } from '../config/env';
 
 const logger = getLogger('orchestrator');
+const config = getConfig();
 
 export interface SyncOptions {
   source?: SourceType;
@@ -43,17 +45,40 @@ export class SyncOrchestrator {
       'Starting sync run'
     );
 
+    void this.executeSync(syncRun.id, connectionIds, options).catch(async (error) => {
+      logger.error({ error, runId: syncRun.id }, 'Background sync execution failed');
+      try {
+        const sourceRuns = await syncRunRepository.getSyncRunSources(syncRun.id);
+        await syncRunRepository.finalizeSyncRun(syncRun.id, sourceRuns);
+      } catch (finalizeError) {
+        logger.error({ error: finalizeError, runId: syncRun.id }, 'Failed to finalize sync run');
+      }
+    });
+
+    return syncRun.id;
+  }
+
+  private async executeSync(
+    syncRunId: string,
+    connectionIds: Map<SourceType, string>,
+    options: SyncOptions
+  ): Promise<void> {
+
     // Determine which sources to sync
-    const sourcesToSync = options.source
-      ? [options.source]
-      : Array.from(this.adapters.keys());
+    const enabledSources = new Set<SourceType>([
+      ...(config.HUBSPOT_ENABLED ? (['HUBSPOT'] as SourceType[]) : []),
+      ...(config.STRIPE_ENABLED ? (['STRIPE'] as SourceType[]) : []),
+      ...(config.GOOGLE_CALENDAR_ENABLED ? (['GOOGLE_CALENDAR'] as SourceType[]) : []),
+    ]);
+    const requestedSources = options.source ? [options.source] : Array.from(this.adapters.keys());
+    const sourcesToSync = requestedSources.filter((source) => enabledSources.has(source));
 
     // Run source syncs in parallel with isolation
     const sourceRunPromises = sourcesToSync
       .filter((source) => connectionIds.has(source))
       .map((source) =>
         this.syncSource(
-          syncRun.id,
+          syncRunId,
           connectionIds.get(source)!,
           source,
           options
@@ -63,18 +88,23 @@ export class SyncOrchestrator {
         })
       );
 
-    const sourceResults = await Promise.allSettled(sourceRunPromises);
+    await Promise.allSettled(sourceRunPromises);
 
     // Collect results
-    const sourceSyncRuns = await syncRunRepository.getSyncRunSources(syncRun.id);
-    const finalRun = await syncRunRepository.finalizeSyncRun(syncRun.id, sourceSyncRuns);
+    const sourceSyncRuns = await syncRunRepository.getSyncRunSources(syncRunId);
+    const finalRun = await syncRunRepository.finalizeSyncRun(syncRunId, sourceSyncRuns);
 
     logger.info(
-      { runId: syncRun.id, status: finalRun.status, sources: sourceSyncRuns.length },
+      {
+        runId: syncRunId,
+        status: finalRun.status,
+        sources: sourceSyncRuns.length,
+        durationMs: finalRun.finishedAt
+          ? finalRun.finishedAt.getTime() - finalRun.startedAt.getTime()
+          : undefined,
+      },
       'Sync run completed'
     );
-
-    return syncRun.id;
   }
 
   /**
@@ -96,7 +126,7 @@ export class SyncOrchestrator {
       syncRunId,
       connectionId,
       source,
-      mode: 'INCREMENTAL',
+      mode: (options.mode || 'incremental').toUpperCase(),
     });
 
     logger.info(
@@ -119,16 +149,23 @@ export class SyncOrchestrator {
       signal: controller.signal,
     };
 
-    let checkpoint = await checkpointRepository.getOrCreateCheckpoint({ connectionId, objectType: 'contact' });
+    const checkpointObjectType: Record<SourceType, string> = {
+      HUBSPOT: 'contact',
+      STRIPE: 'stripe-object',
+      GOOGLE_CALENDAR: 'calendar-event',
+    };
+    const objectType = checkpointObjectType[source];
+    const checkpoint = await checkpointRepository.getOrCreateCheckpoint({ connectionId, objectType });
 
     try {
       let recordsSeen = 0;
       let recordsWritten = 0;
       let recordsSkipped = 0;
       let recordsFailed = 0;
+      let latestCursor = checkpoint.cursor;
 
       // Determine sync mode
-      const shouldFull = !checkpoint.cursor && !checkpoint.watermark;
+      const shouldFull = options.mode === 'full' || (!checkpoint.cursor && !checkpoint.watermark);
       const syncMode = shouldFull ? 'full' : 'incremental';
 
       logger.info({ source, mode: syncMode }, `Using ${syncMode} sync mode`);
@@ -145,6 +182,9 @@ export class SyncOrchestrator {
       let pageCount = 0;
       for await (const page of generator) {
         try {
+          if (page.nextCursor) {
+            latestCursor = page.nextCursor;
+          }
           recordsSeen += page.records.length;
 
           // Normalize and validate records
@@ -194,7 +234,8 @@ export class SyncOrchestrator {
 
       // Update checkpoint after successful completion
       const newCheckpoint = new Date();
-      await checkpointRepository.advanceCheckpoint(connectionId, 'contact', {
+      await checkpointRepository.advanceCheckpoint(connectionId, objectType, {
+        cursor: latestCursor,
         watermark: newCheckpoint,
       });
 
@@ -206,17 +247,27 @@ export class SyncOrchestrator {
       });
 
       logger.info(
-        { source, recordsSeen, recordsWritten, recordsSkipped, recordsFailed },
+        {
+          source,
+          recordsSeen,
+          recordsWritten,
+          recordsSkipped,
+          recordsFailed,
+          durationMs: Date.now() - sourceSyncRun.startedAt.getTime(),
+        },
         `${source} sync completed`
       );
     } catch (error: any) {
-      logger.error({ error, source }, `${source} sync failed`);
+      logger.error(
+        { error, source, durationMs: Date.now() - sourceSyncRun.startedAt.getTime() },
+        `${source} sync failed`
+      );
 
       // Check if it's a stale cursor
       if (adapter.isStaleCursorError(error)) {
         logger.warn({ source }, 'Stale cursor detected, will fallback to full sync');
 
-        await checkpointRepository.clearCheckpoint(connectionId, 'contact');
+        await checkpointRepository.clearCheckpoint(connectionId, objectType);
 
         await syncRunRepository.updateSourceSyncRun(sourceSyncRun.id, {
           status: 'FAILED',

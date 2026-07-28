@@ -13,6 +13,30 @@ export interface NormalizedRecord {
 }
 
 export class NormalizedRepository {
+  async upsertByExternalRecord(data: {
+    source: string;
+    entityType: string;
+    entityData: any;
+    externalRecordId: string;
+  }): Promise<NormalizedRecord> {
+    const existing = await prisma.normalizedRecord.findFirst({
+      where: { externalRecordId: data.externalRecordId },
+    });
+
+    if (existing) {
+      return prisma.normalizedRecord.update({
+        where: { id: existing.id },
+        data: {
+          source: data.source,
+          entityType: data.entityType,
+          entityData: data.entityData as Prisma.InputJsonValue,
+        },
+      }) as unknown as Promise<NormalizedRecord>;
+    }
+
+    return this.create(data);
+  }
+
   async create(data: {
     source: string;
     entityType: string;

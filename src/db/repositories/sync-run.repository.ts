@@ -51,31 +51,28 @@ export class SyncRunRepository {
     source: string;
     mode: string;
   }): Promise<SourceSyncRun> {
-    const sourceRun = await prisma.$transaction(async (transaction) => {
-      // Enforce the foreign-key invariant at the write boundary. This also
-      // protects non-HTTP callers that bypass route-level connection setup.
-      await transaction.sourceConnection.upsert({
-        where: { id: data.connectionId },
-        update: { source: data.source, status: 'ACTIVE' },
-        create: {
-          id: data.connectionId,
-          source: data.source,
-          accountExternalId: data.connectionId,
-          status: 'ACTIVE',
+    // A nested connect-or-create preserves the FK invariant in one query
+    // without holding an interactive transaction/extra pool connection.
+    const sourceRun = await prisma.sourceSyncRun.create({
+      data: {
+        id: uuidv4().replace(/-/g, '').substring(0, 24),
+        source: data.source,
+        mode: data.mode,
+        status: 'RUNNING',
+        startedAt: new Date(),
+        syncRun: { connect: { id: data.syncRunId } },
+        connection: {
+          connectOrCreate: {
+            where: { id: data.connectionId },
+            create: {
+              id: data.connectionId,
+              source: data.source,
+              accountExternalId: data.connectionId,
+              status: 'ACTIVE',
+            },
+          },
         },
-      });
-
-      return transaction.sourceSyncRun.create({
-        data: {
-          id: uuidv4().replace(/-/g, '').substring(0, 24),
-          syncRunId: data.syncRunId,
-          connectionId: data.connectionId,
-          source: data.source,
-          mode: data.mode,
-          status: 'RUNNING',
-          startedAt: new Date(),
-        },
-      });
+      },
     });
 
     return sourceRun as unknown as SourceSyncRun;
@@ -106,13 +103,17 @@ export class SyncRunRepository {
     const allSuccess = sources.length > 0 && sources.every((source) => source.status === 'SUCCESS');
     const anySuccess = sources.some((source) => source.status === 'SUCCESS');
     const status = allSuccess ? 'SUCCESS' : anySuccess ? 'PARTIAL_SUCCESS' : 'FAILED';
+    const currentRun = await prisma.syncRun.findUniqueOrThrow({ where: { id: syncRunId } });
+    const finishedAt = new Date();
     const summary = {
       sourceCount: sources.length,
-      sources: sources.map(({ source, status, recordCount, errorMessage }) => ({
+      durationMs: finishedAt.getTime() - currentRun.startedAt.getTime(),
+      sources: sources.map(({ source, status, recordCount, errorMessage, startedAt, finishedAt }) => ({
         source,
         status,
         recordCount,
         errorMessage,
+        durationMs: finishedAt ? finishedAt.getTime() - startedAt.getTime() : undefined,
       })),
     };
 
@@ -120,7 +121,7 @@ export class SyncRunRepository {
       where: { id: syncRunId },
       data: {
         status,
-        finishedAt: new Date(),
+        finishedAt,
         summary: summary as Prisma.InputJsonValue,
       },
     }) as unknown as Promise<SyncRun>;
