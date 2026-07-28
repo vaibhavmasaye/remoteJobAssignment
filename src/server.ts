@@ -1,6 +1,7 @@
 import { getConfig } from './config/env';
 import { getLogger } from './observability/logger';
 import { createApp } from './app';
+import { initializeDatabase } from './db';
 
 // Force flush
 console.log('[STARTUP] ================================');
@@ -50,6 +51,10 @@ async function start() {
     console.log('[STARTUP] Loading configuration...');
     const config = getConfig();
     const logger = getLogger('server');
+
+    console.log('[STARTUP] Initializing database schema...');
+    await initializeDatabase();
+    console.log('[STARTUP] ✅ Database initialized');
     
     console.log('[STARTUP] Creating Fastify application...');
     const app = await createApp();
