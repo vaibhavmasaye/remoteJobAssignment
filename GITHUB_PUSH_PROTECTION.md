@@ -8,7 +8,7 @@ GitHub detected HubSpot API credentials in your documentation files and blocked 
 - `c0e2393` - Setup guides with HubSpot credentials
 
 **Detected secret:**
-- HubSpot API Key: `pat-na2-0b3eb08f-...` (redacted for security)
+- HubSpot API Key: (redacted for security)
 
 ---
 

@@ -103,7 +103,7 @@ Once server is running:
 ```bash
 # Trigger sync of all sources
 curl -X POST http://localhost:3000/api/v1/sync \
-  -H "Authorization: Bearer sync-pipeline-admin-key-secure-random-token-123456789abcdef" \
+  -H "Authorization: Bearer YOUR_ADMIN_API_KEY" \
   -H "Content-Type: application/json"
 
 # Response:
@@ -115,7 +115,7 @@ Get the `runId` and check results:
 ```bash
 # Replace with your runId
 curl http://localhost:3000/api/v1/sync-runs/550e8400-... \
-  -H "Authorization: Bearer sync-pipeline-admin-key-secure-random-token-123456789abcdef"
+  -H "Authorization: Bearer YOUR_ADMIN_API_KEY"
 
 # Response shows sync status, source results, record counts
 ```

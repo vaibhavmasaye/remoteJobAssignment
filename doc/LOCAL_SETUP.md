@@ -200,7 +200,7 @@ curl https://api.hubapi.com/crm/v3/objects/contacts \
 ### 3. Trigger First Sync
 ```bash
 curl -X POST http://localhost:3000/api/v1/sync \
-  -H "Authorization: Bearer sync-pipeline-admin-key-secure-random-token-123456789abcdef" \
+  -H "Authorization: Bearer YOUR_ADMIN_API_KEY" \
   -H "Content-Type: application/json"
 
 # Response:
@@ -215,11 +215,11 @@ curl -X POST http://localhost:3000/api/v1/sync \
 # Get sync run ID from previous response, then:
 
 curl http://localhost:3000/api/v1/sync-runs/:runId \
-  -H "Authorization: Bearer sync-pipeline-admin-key-secure-random-token-123456789abcdef"
+  -H "Authorization: Bearer YOUR_ADMIN_API_KEY"
 
 # Check all runs
 curl http://localhost:3000/api/v1/sync-runs \
-  -H "Authorization: Bearer sync-pipeline-admin-key-secure-random-token-123456789abcdef"
+  -H "Authorization: Bearer YOUR_ADMIN_API_KEY"
 ```
 
 ---
