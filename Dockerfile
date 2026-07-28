@@ -17,9 +17,6 @@ COPY src ./src
 # Generate Prisma Client
 RUN npm exec prisma generate -- --schema prisma/schema.prisma
 
-# Verify prisma exists by listing
-RUN ls -la src/generated/prisma/index.ts || exit 1
-
 # Build 
 RUN npm run build
 
