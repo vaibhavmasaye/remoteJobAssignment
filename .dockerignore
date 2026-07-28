@@ -20,4 +20,3 @@ doc
 .prettierrc.json
 .eslintrc.json
 vitest.config.ts
-prisma.config.ts
