@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database
+  postgres:
+    image: postgres:15-alpine
+    container_name: sync-pipeline-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: sync_pipeline
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sync-pipeline
+
+  # Sync Pipeline API
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sync-pipeline-api
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/sync_pipeline
+      ADMIN_AUTH_TOKEN: dev-admin-token-insecure-do-not-use-in-production
+      HUBSPOT_API_KEY: ${HUBSPOT_API_KEY:-mock-key}
+      STRIPE_API_KEY: ${STRIPE_API_KEY:-mock-key}
+      GOOGLE_CALENDAR_OAUTH_CLIENT_ID: ${GOOGLE_CALENDAR_OAUTH_CLIENT_ID:-mock-id}
+      GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET: ${GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET:-mock-secret}
+      TRUST_PROXY: "false"
+      LOG_LEVEL: debug
+      HEALTH_CHECK_DATABASE: "true"
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/dist
+    networks:
+      - sync-pipeline
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    command: npm run dev
+
+volumes:
+  postgres_data:
+
+networks:
+  sync-pipeline:
+    driver: bridge

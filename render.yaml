@@ -1,0 +1,100 @@
+services:
+  - type: web
+    name: sync-pipeline-api
+    env: docker
+    repo: https://github.com/YOUR_USERNAME/remoteJobAssignment # Replace with your repo URL
+    region: oregon # or closest region to you
+    plan: free # Free tier on Render
+    
+    # Docker configuration
+    dockerfilePath: ./Dockerfile
+    
+    # Port configuration
+    ports:
+      - port: 3000
+        protocol: HTTP
+    
+    # Environment variables (set these in Render dashboard or via render.yaml)
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: TRUST_PROXY
+        value: "true"
+      - key: LOG_LEVEL
+        value: info
+      - key: REQUEST_BODY_LIMIT_BYTES
+        value: "1048576"
+      - key: HEALTH_CHECK_DATABASE
+        value: "false" # Can't use this on free tier without database service
+      - key: SYNC_RUN_CORRELATION_ID_LENGTH
+        value: "16"
+    
+    # Secrets (store sensitive data in Render dashboard, not in this file)
+    # These should be added via Render dashboard UI:
+    # - DATABASE_URL (PostgreSQL connection string)
+    # - ADMIN_AUTH_TOKEN (secure random token)
+    # - HUBSPOT_API_KEY
+    # - STRIPE_API_KEY
+    # - GOOGLE_CALENDAR_OAUTH_CLIENT_ID
+    # - GOOGLE_CALENDAR_OAUTH_CLIENT_SECRET
+    # - SENTRY_DSN (optional, for error tracking)
+    
+    # Build configuration
+    buildCommand: npm run build
+    startCommand: node dist/server.js
+    
+    # Auto-deploy on push
+    autoDeploy: true
+    
+    # Keep alive options (for free tier, to prevent idling)
+    # Note: Render free tier services sleep after 15 minutes of inactivity
+    # Consider upgrading to pay-as-you-go for production use
+    
+    # Health checks
+    healthCheckPath: /health/ready
+    healthCheckInterval: 30
+    healthCheckTimeout: 10
+
+databases:
+  # Uncomment and configure if using Render's PostgreSQL service
+  # - name: sync-pipeline-db
+  #   engine: postgres
+  #   version: 15
+  #   plan: free
+  #   postgresSQLVersion: "15"
+  #   previewPlanEnabled: false
+  #   enablePostgresIpProviderV4: true
+
+# Environment-specific overrides
+previewEnvironments:
+  - name: preview
+    branch: develop
+    services:
+      - name: sync-pipeline-api-preview
+        autoDeploy: true
+
+# Additional notes for deployment:
+# 1. Set DATABASE_URL to your PostgreSQL connection string
+#    - For local testing: postgresql://user:password@localhost:5432/sync_pipeline
+#    - For Render PostgreSQL: Use the connection string provided in Render dashboard
+#    
+# 2. Generate secure ADMIN_AUTH_TOKEN:
+#    - Use: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+#    
+# 3. API credentials:
+#    - HubSpot: Get from HubSpot app dashboard
+#    - Stripe: Get from Stripe dashboard
+#    - Google Calendar: Set up OAuth in Google Cloud Console
+#    
+# 4. Free tier limitations:
+#    - Services spin down after 15 minutes of inactivity
+#    - Database storage limited (512 MB for free PostgreSQL)
+#    - Limited outbound network
+#    - No custom domains without paid upgrade
+#    
+# 5. Monitoring:
+#    - Use /health/live for liveness probe
+#    - Use /health/ready for readiness probe
+#    - Check /api/v1/status for application status
